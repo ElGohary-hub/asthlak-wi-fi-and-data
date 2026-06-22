@@ -35,10 +35,12 @@ fun HomeScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     
-    // مراقبة وتحديث حالة الصلاحية تلقائياً عند عودة المستخدم من الإعدادات
     var hasPermission by remember { mutableStateOf(NetworkStatsHelper.hasUsageStatsPermission(context)) }
     var appsList by remember { mutableStateOf(listOf<RealAppUsage>()) }
     var isLoading by remember { mutableStateOf(true) }
+    
+    // التعديل الأول: المتغير ده هو اللي هيجبر التطبيق يعمل ريفريش حقيقي
+    var refreshTrigger by remember { mutableIntStateOf(0) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -58,8 +60,8 @@ fun HomeScreen() {
         return
     }
 
-    // جلب البيانات الحقيقية من المعالج في الخلفية
-    LaunchedEffect(hasPermission) {
+    // التعديل التاني: ربطنا الـ LaunchedEffect بالـ refreshTrigger
+    LaunchedEffect(hasPermission, refreshTrigger) {
         if (hasPermission) {
             isLoading = true
             appsList = withContext(Dispatchers.IO) {
@@ -75,8 +77,8 @@ fun HomeScreen() {
                 title = { Text("استهلاك البيانات الحقيقي", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = {
-                        isLoading = true
-                        hasPermission = NetworkStatsHelper.hasUsageStatsPermission(context)
+                        // التعديل التالت: لما بتدوس هنا الرقم بيزيد، فالكود اللي فوق بيحس بالتغيير ويشتغل
+                        refreshTrigger++
                     }) { 
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh") 
                     }
@@ -87,6 +89,9 @@ fun HomeScreen() {
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else if (appsList.isEmpty()) {
+                // ضفتلك دي كمان عشان لو مفيش استهلاك خالص النهارده ميجيبش شاشة فاضية
+                Text("لا يوجد بيانات استهلاك لليوم", modifier = Modifier.align(Alignment.Center), color = Color.Gray)
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Card(
@@ -127,7 +132,6 @@ fun RealAppCard(app: RealAppUsage) {
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // عرض أيقونة التطبيق الحقيقية من خلال نظام أندرويد
             Surface(
                 modifier = Modifier.size(48.dp),
                 shape = CircleShape,
