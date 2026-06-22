@@ -1,5 +1,8 @@
 package com.example.datatrack.ui.screens
 
+import android.content.Intent
+import android.provider.Settings
+import android.widget.ImageView
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,56 +15,109 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.datatrack.ui.theme.*
+import com.example.datatrack.utils.NetworkStatsHelper
+import com.example.datatrack.utils.RealAppUsage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(hasPermission: Boolean = true) {
+fun HomeScreen() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    
+    // مراقبة وتحديث حالة الصلاحية تلقائياً عند عودة المستخدم من الإعدادات
+    var hasPermission by remember { mutableStateOf(NetworkStatsHelper.hasUsageStatsPermission(context)) }
+    var appsList by remember { mutableStateOf(listOf<RealAppUsage>()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermission = NetworkStatsHelper.hasUsageStatsPermission(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     if (!hasPermission) {
-        PermissionScreen(onOpenSettings = {})
+        PermissionScreen(onOpenSettings = {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+            context.startActivity(intent)
+        })
         return
+    }
+
+    // جلب البيانات الحقيقية من المعالج في الخلفية
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            isLoading = true
+            appsList = withContext(Dispatchers.IO) {
+                NetworkStatsHelper.getAppsDataUsage(context)
+            }
+            isLoading = false
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("استهلاك البيانات", fontWeight = FontWeight.Bold) },
+                title = { Text("استهلاك البيانات الحقيقي", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = { }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh") }
+                    IconButton(onClick = {
+                        isLoading = true
+                        hasPermission = NetworkStatsHelper.hasUsageStatsPermission(context)
+                    }) { 
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh") 
+                    }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { }) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Sort") }
         }
     ) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "آخر تحديث: 20 يونيو 2026", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                }
-            }
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "استهلاك اليوم الحالي منذ 12:00 ص",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                        }
+                    }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(MockApps) { app -> AppUsageCard(app = app) }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(appsList) { app -> RealAppCard(app = app) }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun AppUsageCard(app: AppUsage) {
+fun RealAppCard(app: RealAppUsage) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -71,20 +127,37 @@ fun AppUsageCard(app: AppUsage) {
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(modifier = Modifier.size(48.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
-                Icon(imageVector = app.icon, contentDescription = null, modifier = Modifier.padding(12.dp))
+            // عرض أيقونة التطبيق الحقيقية من خلال نظام أندرويد
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        ImageView(ctx).apply {
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                        }
+                    },
+                    update = { imageView ->
+                        imageView.setImageDrawable(app.iconDrawable)
+                    },
+                    modifier = Modifier.padding(8.dp).fillMaxSize()
+                )
             }
+            
             Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = app.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = app.lastUsed, color = Color.Gray, fontSize = 12.sp)
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = app.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                Text(text = app.packageName, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
             }
-            Spacer(modifier = Modifier.weight(1f))
+            
             Column(horizontalAlignment = Alignment.End) {
-                Text(text = formatBytes(app.total), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(text = formatBytes(app.total), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = formatBytes(app.wifi), color = WifiColor, fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
-                    Text(text = formatBytes(app.mobile), color = DataColor, fontSize = 12.sp)
+                    Text(text = "W: ${formatBytes(app.wifi)}", color = WifiColor, fontSize = 11.sp, modifier = Modifier.padding(end = 6.dp))
+                    Text(text = "M: ${formatBytes(app.mobile)}", color = DataColor, fontSize = 11.sp)
                 }
             }
         }
