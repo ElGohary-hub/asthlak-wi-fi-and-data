@@ -23,6 +23,13 @@ jobs:
         with:
           gradle-version: '8.4'
 
+      # الخطوة السحرية لحفظ بصمة التطبيق عشان يقبل التحديثات
+      - name: Cache Debug Keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: debug-keystore
+
       - name: Build Debug APK
         run: gradle assembleDebug
 
