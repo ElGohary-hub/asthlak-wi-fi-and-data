@@ -58,7 +58,6 @@ object NetworkStatsHelper {
             val wifiStats = networkStatsManager.querySummary(ConnectivityManager.TYPE_WIFI, null, startTime, endTime)
             val bucket = NetworkStats.Bucket()
             while (wifiStats.hasNextBucket()) {
-                // التعديل هنا: getNextBucket
                 wifiStats.getNextBucket(bucket)
                 val uid = bucket.uid
                 val bytes = bucket.rxBytes + bucket.txBytes
@@ -74,7 +73,6 @@ object NetworkStatsHelper {
             val mobileStats = networkStatsManager.querySummary(ConnectivityManager.TYPE_MOBILE, null, startTime, endTime)
             val bucket = NetworkStats.Bucket()
             while (mobileStats.hasNextBucket()) {
-                // التعديل هنا: getNextBucket
                 mobileStats.getNextBucket(bucket)
                 val uid = bucket.uid
                 val bytes = bucket.rxBytes + bucket.txBytes
@@ -92,12 +90,24 @@ object NetworkStatsHelper {
             val (wifi, mobile) = bytesPair
             if (wifi == 0L && mobile == 0L) continue 
 
-            val packages = packageManager.getPackagesForUid(uid)
+            // --- الخدعة هنا لمعالجة التطبيقات المستنسخة ---
+            // أندرويد بيعطي التطبيقات في المساحات المزدوجة UID أكبر من 100000
+            val isClonedApp = uid >= 100000
+            // استخراج رقم التطبيق الأصلي لتتمكن الحزم من قراءته
+            val baseUid = if (isClonedApp) uid % 100000 else uid
+
+            val packages = packageManager.getPackagesForUid(baseUid)
             if (!packages.isNullOrEmpty()) {
                 val packageName = packages[0]
                 try {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                    val appName = packageManager.getApplicationLabel(appInfo).toString()
+                    var appName = packageManager.getApplicationLabel(appInfo).toString()
+                    
+                    // لو ده تطبيق مستنسخ، ضيف جنبه كلمة لتمييزه
+                    if (isClonedApp) {
+                        appName += " (نسخة 2)"
+                    }
+
                     val icon = packageManager.getApplicationIcon(appInfo)
 
                     appUsageList.add(
