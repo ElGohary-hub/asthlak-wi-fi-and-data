@@ -4,6 +4,7 @@ import android.app.AppOpsManager
 import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
@@ -85,43 +86,50 @@ object NetworkStatsHelper {
         }
 
         val appUsageList = mutableListOf<RealAppUsage>()
+        var unknownWifi = 0L
+        var unknownMobile = 0L
 
+        // 1. الخدعة الجديدة: سحب كل التطبيقات في خريطة محلية لتخطي حظر المسارات الوهمية
+        val installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+        val appInfoMap = mutableMapOf<Int, ApplicationInfo>()
+        for (info in installedApps) {
+            appInfoMap[info.uid % 100000] = info // تخزين الرقم التعريفي الأساسي
+        }
+
+        // 2. معالجة الاستهلاك
         for ((uid, bytesPair) in usageMap) {
             val (wifi, mobile) = bytesPair
             if (wifi == 0L && mobile == 0L) continue 
 
-            // --- الخدعة هنا لمعالجة التطبيقات المستنسخة ---
-            // أندرويد بيعطي التطبيقات في المساحات المزدوجة UID أكبر من 100000
+            val baseUid = uid % 100000
             val isClonedApp = uid >= 100000
-            // استخراج رقم التطبيق الأصلي لتتمكن الحزم من قراءته
-            val baseUid = if (isClonedApp) uid % 100000 else uid
 
-            val packages = packageManager.getPackagesForUid(baseUid)
-            if (!packages.isNullOrEmpty()) {
-                val packageName = packages[0]
+            val appInfo = appInfoMap[baseUid]
+            if (appInfo != null) {
                 try {
-                    val appInfo = packageManager.getApplicationInfo(packageName, 0)
                     var appName = packageManager.getApplicationLabel(appInfo).toString()
-                    
-                    // لو ده تطبيق مستنسخ، ضيف جنبه كلمة لتمييزه
                     if (isClonedApp) {
-                        appName += " (نسخة 2)"
+                        appName += " (نسخة 2)" // تمييز التطبيق المستنسخ
                     }
-
                     val icon = packageManager.getApplicationIcon(appInfo)
-
-                    appUsageList.add(
-                        RealAppUsage(
-                            name = appName,
-                            packageName = packageName,
-                            iconDrawable = icon,
-                            wifi = wifi,
-                            mobile = mobile
-                        )
-                    )
-                } catch (e: PackageManager.NameNotFoundException) {
+                    appUsageList.add(RealAppUsage(appName, appInfo.packageName, icon, wifi, mobile))
+                } catch (e: Exception) {
+                    unknownWifi += wifi
+                    unknownMobile += mobile
                 }
+            } else {
+                // تجميع أي استهلاك مخفي أو خاص بخدمات النظام الأساسية جداً
+                unknownWifi += wifi
+                unknownMobile += mobile
             }
+        }
+
+        // 3. عرض الاستهلاك المخفي في كارت مجمع عشان الإجمالي يظبط
+        if (unknownWifi > 0 || unknownMobile > 0) {
+            try {
+                val defaultIcon = context.getDrawable(android.R.drawable.sym_def_app_icon)!!
+                appUsageList.add(RealAppUsage("نظام أندرويد وخدمات مخفية", "android.system", defaultIcon, unknownWifi, unknownMobile))
+            } catch (e: Exception) {}
         }
 
         return appUsageList.sortedByDescending { it.wifi + it.mobile }
