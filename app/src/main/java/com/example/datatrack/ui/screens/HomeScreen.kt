@@ -76,7 +76,6 @@ fun HomeScreen() {
 
     var capsuleText by remember { mutableStateOf("استهلاك الإنترنت") }
     
-    // متغير للتحكم في ظهور النتيجة المودرن
     var showDatePickerDialog by remember { mutableStateOf(false) }
 
     val isDark = isSystemInDarkTheme()
@@ -120,7 +119,6 @@ fun HomeScreen() {
 
     val dateFormatter = SimpleDateFormat("dd MMM", Locale("ar"))
 
-    // تشغيل نافذة التقويم المودرن إذا تم طلبها
     if (showDatePickerDialog) {
         ModernDateRangePicker(
             onDismiss = { showDatePickerDialog = false },
@@ -145,7 +143,6 @@ fun HomeScreen() {
                             .fillMaxWidth()
                             .padding(bottom = 12.dp)
                             .clickable { 
-                                // فتح التقويم المودرن
                                 showDatePickerDialog = true
                             },
                         shape = capsuleShape,
@@ -205,7 +202,6 @@ fun HomeScreen() {
                                                 currentEndTime = System.currentTimeMillis()
                                             }
                                             2 -> { 
-                                                // فتح التقويم المودرن
                                                 showDatePickerDialog = true
                                             }
                                         }
@@ -336,7 +332,6 @@ fun HomeScreen() {
     }
 }
 
-// تصميم التقويم المودرن (الكبسولة) اللي بيقضي على شكل التليفون الأرضي
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModernDateRangePicker(
@@ -352,14 +347,14 @@ fun ModernDateRangePicker(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f), // بياخد 85% من الشاشة عشان ميبقاش مضغوط
-            shape = RoundedCornerShape(30.dp), // نفس ستايل الكبسولة
+                .fillMaxHeight(0.85f), 
+            shape = RoundedCornerShape(30.dp), 
             color = bgColor,
             border = BorderStroke(1.dp, borderColor),
             shadowElevation = if (isDark) 0.dp else 8.dp
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // التقويم المودرن من Material 3
+                // التعديل هنا: شلنا الـ headline الخارجي عشان ميضربش Error مع إصدار المكتبة
                 DateRangePicker(
                     state = state,
                     modifier = Modifier.weight(1f),
@@ -371,17 +366,9 @@ fun ModernDateRangePicker(
                             color = MaterialTheme.colorScheme.primary
                         )
                     },
-                    headline = {
-                        DateRangePickerDefaults.DateRangePickerHeadline(
-                            state = state,
-                            dateFormatter = DatePickerDefaults.dateFormatter(),
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    },
                     showModeToggle = false
                 )
                 
-                // زراير الإلغاء والتأكيد
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -397,7 +384,6 @@ fun ModernDateRangePicker(
                             val start = state.selectedStartDateMillis
                             val end = state.selectedEndDateMillis
                             if (start != null && end != null) {
-                                // إضافة 23 ساعة و 59 دقيقة لنهاية اليوم عشان يحسب اليوم كله
                                 onDateSelected(start, end + 86399999L)
                                 onDismiss()
                             }
