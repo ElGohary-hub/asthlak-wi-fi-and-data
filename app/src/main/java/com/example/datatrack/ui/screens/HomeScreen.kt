@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,7 +90,6 @@ fun HomeScreen() {
     var currentStartTime by remember { mutableLongStateOf(getTodayStart()) }
     var currentEndTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    // تغيير النص الافتراضي للكبسولة العلوية
     var capsuleText by remember { mutableStateOf("استهلاك الإنترنت") }
 
     // متغيرات الثيم الموحد للكبسولة
@@ -136,43 +134,51 @@ fun HomeScreen() {
 
     val dateFormatter = SimpleDateFormat("dd MMM", Locale("ar"))
 
-    // إزالة الـ TopAppBar واستخدام bottomBar للشريط السفلي
     Scaffold(
         bottomBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
-                    .navigationBarsPadding() // لتجنب أزرار النظام السفلية
+                    .navigationBarsPadding() 
             ) {
-                // إظهار التواريخ فوق الشريط السفلي إذا تم اختيار "مخصص"
+                // الكبسولة الجديدة لعرض التاريخ المخصص (بديل الشكل المربع)
                 if (selectedFilter == 2) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .clickable { 
+                                showDateRangePicker(context) { start, end ->
+                                    currentStartTime = start
+                                    currentEndTime = end
+                                }
+                            },
+                        shape = capsuleShape,
+                        color = capsuleBgColor,
+                        border = BorderStroke(1.dp, capsuleBorderColor),
+                        shadowElevation = capsuleShadow
                     ) {
-                        Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "من ${dateFormatter.format(currentStartTime)} إلى ${dateFormatter.format(currentEndTime)}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { 
-                            showDateRangePicker(context) { start, end ->
-                                currentStartTime = start
-                                currentEndTime = end
-                            }
-                        }) {
-                            Text("تغيير", fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "من ${dateFormatter.format(currentStartTime)} إلى ${dateFormatter.format(currentEndTime)}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color.White else Color.Black
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.Edit, contentDescription = "تعديل", modifier = Modifier.size(16.dp), tint = Color.Gray)
                         }
                     }
                 }
 
-                // الشريط السفلي (الفلاتر + الريفريش) على شكل كبسولة
+                // الشريط السفلي (الفلاتر + الريفريش)
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = capsuleShape,
@@ -185,7 +191,6 @@ fun HomeScreen() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // أزرار الفلترة
                         Row(
                             modifier = Modifier.weight(1f),
                             horizontalArrangement = Arrangement.SpaceEvenly
@@ -228,7 +233,6 @@ fun HomeScreen() {
                         
                         Spacer(modifier = Modifier.width(8.dp))
                         
-                        // زرار الريفريش
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
@@ -253,11 +257,10 @@ fun HomeScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .statusBarsPadding() // لتجنب تداخل شريط الإشعارات العلوي
+                .statusBarsPadding() 
         ) {
             Spacer(modifier = Modifier.height(16.dp))
             
-            // الكبسولة التفاعلية العلوية
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 AnimatedStarCapsule(
                     text = capsuleText,
@@ -269,40 +272,54 @@ fun HomeScreen() {
             
             Spacer(modifier = Modifier.height(16.dp))
 
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.primary,
-                indicator = { tabPositions ->
-                    if (selectedTabIndex < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                            height = 3.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+            // التابات الجديدة (الواي فاي / بيانات الهاتف) بستايل الكبسولة
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = capsuleShape,
+                color = capsuleBgColor,
+                border = BorderStroke(1.dp, capsuleBorderColor),
+                shadowElevation = capsuleShadow
+            ) {
+                Row(
+                    modifier = Modifier.padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        val isSelected = selectedTabIndex == index
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedTabIndex = index },
+                            shape = RoundedCornerShape(26.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (index == 0) Icons.Default.Wifi else Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else Color.Gray
+                                )
+                            }
+                        }
                     }
                 }
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { 
-                            Text(
-                                text = title, 
-                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else Color.Gray
-                            ) 
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (index == 0) Icons.Default.Wifi else Icons.Default.Phone,
-                                contentDescription = null
-                            )
-                        }
-                    )
-                }
             }
+            
+            Spacer(modifier = Modifier.height(8.dp))
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isLoading) {
@@ -329,7 +346,6 @@ fun HomeScreen() {
     }
 }
 
-// تصميم كارت التطبيق بنفس ستايل الكبسولة
 @Composable
 fun RealAppCard(app: RealAppUsage, isWifiTab: Boolean) {
     val isDark = isSystemInDarkTheme()
@@ -339,7 +355,7 @@ fun RealAppCard(app: RealAppUsage, isWifiTab: Boolean) {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp), // حواف دائرية بالكامل للكبسولة
+        shape = RoundedCornerShape(30.dp), 
         color = bgColor,
         border = BorderStroke(1.dp, borderColor),
         shadowElevation = shadowElevation
@@ -380,7 +396,6 @@ fun RealAppCard(app: RealAppUsage, isWifiTab: Boolean) {
     }
 }
 
-// الكبسولة التفاعلية العلوية
 @Composable
 fun AnimatedStarCapsule(
     text: String,
@@ -395,7 +410,7 @@ fun AnimatedStarCapsule(
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(30.dp), // حواف دائرية بالكامل
+        shape = RoundedCornerShape(30.dp),
         color = bgColor,
         border = BorderStroke(1.dp, borderColor),
         shadowElevation = shadowElevation
@@ -408,7 +423,7 @@ fun AnimatedStarCapsule(
             Icon(
                 imageVector = Icons.Default.Star,
                 contentDescription = "Star Icon",
-                tint = Color(0xFFFFC107), // لون عنبري
+                tint = Color(0xFFFFC107), 
                 modifier = Modifier.size(20.dp)
             )
             
