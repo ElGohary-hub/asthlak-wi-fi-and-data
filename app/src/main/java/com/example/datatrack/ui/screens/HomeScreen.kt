@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.datatrack.ui.theme.*
@@ -119,8 +118,9 @@ fun HomeScreen() {
 
     val dateFormatter = SimpleDateFormat("dd MMM", Locale("ar"))
 
+    // استدعاء التقويم المصغر الجديد
     if (showDatePickerDialog) {
-        ModernDateRangePicker(
+        CompactDateRangePicker(
             onDismiss = { showDatePickerDialog = false },
             onDateSelected = { start, end ->
                 currentStartTime = start
@@ -332,69 +332,65 @@ fun HomeScreen() {
     }
 }
 
+// التقويم المتسلسل المصغر (أصغر وأشيك بكتير)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModernDateRangePicker(
+fun CompactDateRangePicker(
     onDismiss: () -> Unit,
     onDateSelected: (Long, Long) -> Unit
 ) {
-    val state = rememberDateRangePickerState()
-    val isDark = isSystemInDarkTheme()
-    val bgColor = if (isDark) Color(0xFF212121) else Color.White
-    val borderColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.26f)
+    // خطوة 1 = تاريخ البدء، خطوة 2 = تاريخ الانتهاء
+    var step by remember { mutableIntStateOf(1) } 
+    var tempStart by remember { mutableLongStateOf(0L) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f), 
-            shape = RoundedCornerShape(30.dp), 
-            color = bgColor,
-            border = BorderStroke(1.dp, borderColor),
-            shadowElevation = if (isDark) 0.dp else 8.dp
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // التعديل هنا: شلنا الـ headline الخارجي عشان ميضربش Error مع إصدار المكتبة
-                DateRangePicker(
-                    state = state,
-                    modifier = Modifier.weight(1f),
-                    title = {
-                        Text(
-                            text = "اختر الفترة",
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    showModeToggle = false
-                )
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("إلغاء", color = Color.Gray, fontWeight = FontWeight.Bold)
+    if (step == 1) {
+        val startState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (startState.selectedDateMillis != null) {
+                            tempStart = startState.selectedDateMillis!!
+                            step = 2 // الانتقال لاختيار النهاية
+                        }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val start = state.selectedStartDateMillis
-                            val end = state.selectedEndDateMillis
-                            if (start != null && end != null) {
-                                onDateSelected(start, end + 86399999L)
-                                onDismiss()
-                            }
-                        },
-                        enabled = state.selectedEndDateMillis != null,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("تأكيد", fontWeight = FontWeight.Bold)
-                    }
-                }
+                ) { Text("التالي", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("إلغاء", color = Color.Gray) }
             }
+        ) {
+            DatePicker(
+                state = startState,
+                title = { Text("اختر تاريخ البدء", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold) },
+                showModeToggle = false
+            )
+        }
+    } else if (step == 2) {
+        val endState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (endState.selectedDateMillis != null) {
+                            // إضافة وقت لنهاية اليوم لضمان حساب اليوم كاملاً
+                            onDateSelected(tempStart, endState.selectedDateMillis!! + 86399999L)
+                            onDismiss()
+                        }
+                    }
+                ) { Text("تأكيد", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { step = 1 }) { Text("رجوع", color = Color.Gray) }
+            }
+        ) {
+            DatePicker(
+                state = endState,
+                title = { Text("اختر تاريخ الانتهاء", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold) },
+                showModeToggle = false
+            )
         }
     }
 }
