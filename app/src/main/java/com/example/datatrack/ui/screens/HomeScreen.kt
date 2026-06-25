@@ -126,7 +126,8 @@ fun HomeScreen() {
                         },
                         icon = {
                             Icon(
-                                imageVector = if (index == 0) Icons.Default.Wifi else Icons.Default.CellularAlt,
+                                // التعديل هنا: استخدمنا Phone بدل CellularAlt عشان ميعملش Error
+                                imageVector = if (index == 0) Icons.Default.Wifi else Icons.Default.Phone,
                                 contentDescription = null
                             )
                         }
