@@ -1,7 +1,5 @@
 package com.example.datatrack.ui.screens
 
-import android.app.DatePickerDialog
-import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.widget.ImageView
@@ -28,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.datatrack.ui.theme.*
@@ -56,21 +55,6 @@ fun getMonthStart(): Long {
     }.timeInMillis
 }
 
-fun showDateRangePicker(context: Context, onRangeSelected: (Long, Long) -> Unit) {
-    val currentCal = Calendar.getInstance()
-    DatePickerDialog(context, { _, startYear, startMonth, startDay ->
-        val startCal = Calendar.getInstance().apply {
-            set(startYear, startMonth, startDay, 0, 0, 0)
-        }
-        DatePickerDialog(context, { _, endYear, endMonth, endDay ->
-            val endCal = Calendar.getInstance().apply {
-                set(endYear, endMonth, endDay, 23, 59, 59)
-            }
-            onRangeSelected(startCal.timeInMillis, endCal.timeInMillis)
-        }, startYear, startMonth, startDay).show()
-    }, currentCal.get(Calendar.YEAR), currentCal.get(Calendar.MONTH), currentCal.get(Calendar.DAY_OF_MONTH)).show()
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen() {
@@ -91,8 +75,10 @@ fun HomeScreen() {
     var currentEndTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     var capsuleText by remember { mutableStateOf("استهلاك الإنترنت") }
+    
+    // متغير للتحكم في ظهور النتيجة المودرن
+    var showDatePickerDialog by remember { mutableStateOf(false) }
 
-    // متغيرات الثيم الموحد للكبسولة
     val isDark = isSystemInDarkTheme()
     val capsuleBgColor = if (isDark) Color(0xFF212121) else Color.White
     val capsuleBorderColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.26f)
@@ -134,6 +120,17 @@ fun HomeScreen() {
 
     val dateFormatter = SimpleDateFormat("dd MMM", Locale("ar"))
 
+    // تشغيل نافذة التقويم المودرن إذا تم طلبها
+    if (showDatePickerDialog) {
+        ModernDateRangePicker(
+            onDismiss = { showDatePickerDialog = false },
+            onDateSelected = { start, end ->
+                currentStartTime = start
+                currentEndTime = end
+            }
+        )
+    }
+
     Scaffold(
         bottomBar = {
             Column(
@@ -142,17 +139,14 @@ fun HomeScreen() {
                     .padding(16.dp)
                     .navigationBarsPadding() 
             ) {
-                // الكبسولة الجديدة لعرض التاريخ المخصص (بديل الشكل المربع)
                 if (selectedFilter == 2) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp)
                             .clickable { 
-                                showDateRangePicker(context) { start, end ->
-                                    currentStartTime = start
-                                    currentEndTime = end
-                                }
+                                // فتح التقويم المودرن
+                                showDatePickerDialog = true
                             },
                         shape = capsuleShape,
                         color = capsuleBgColor,
@@ -178,7 +172,6 @@ fun HomeScreen() {
                     }
                 }
 
-                // الشريط السفلي (الفلاتر + الريفريش)
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = capsuleShape,
@@ -212,10 +205,8 @@ fun HomeScreen() {
                                                 currentEndTime = System.currentTimeMillis()
                                             }
                                             2 -> { 
-                                                showDateRangePicker(context) { start, end ->
-                                                    currentStartTime = start
-                                                    currentEndTime = end
-                                                }
+                                                // فتح التقويم المودرن
+                                                showDatePickerDialog = true
                                             }
                                         }
                                     }
@@ -272,7 +263,6 @@ fun HomeScreen() {
             
             Spacer(modifier = Modifier.height(16.dp))
 
-            // التابات الجديدة (الواي فاي / بيانات الهاتف) بستايل الكبسولة
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -339,6 +329,83 @@ fun HomeScreen() {
                         items(displayList) { app -> 
                             RealAppCard(app = app, isWifiTab = selectedTabIndex == 0) 
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// تصميم التقويم المودرن (الكبسولة) اللي بيقضي على شكل التليفون الأرضي
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModernDateRangePicker(
+    onDismiss: () -> Unit,
+    onDateSelected: (Long, Long) -> Unit
+) {
+    val state = rememberDateRangePickerState()
+    val isDark = isSystemInDarkTheme()
+    val bgColor = if (isDark) Color(0xFF212121) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.26f)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f), // بياخد 85% من الشاشة عشان ميبقاش مضغوط
+            shape = RoundedCornerShape(30.dp), // نفس ستايل الكبسولة
+            color = bgColor,
+            border = BorderStroke(1.dp, borderColor),
+            shadowElevation = if (isDark) 0.dp else 8.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // التقويم المودرن من Material 3
+                DateRangePicker(
+                    state = state,
+                    modifier = Modifier.weight(1f),
+                    title = {
+                        Text(
+                            text = "اختر الفترة",
+                            modifier = Modifier.padding(start = 16.dp, top = 16.dp),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    headline = {
+                        DateRangePickerDefaults.DateRangePickerHeadline(
+                            state = state,
+                            dateFormatter = DatePickerDefaults.dateFormatter(),
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    },
+                    showModeToggle = false
+                )
+                
+                // زراير الإلغاء والتأكيد
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("إلغاء", color = Color.Gray, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val start = state.selectedStartDateMillis
+                            val end = state.selectedEndDateMillis
+                            if (start != null && end != null) {
+                                // إضافة 23 ساعة و 59 دقيقة لنهاية اليوم عشان يحسب اليوم كله
+                                onDateSelected(start, end + 86399999L)
+                                onDismiss()
+                            }
+                        },
+                        enabled = state.selectedEndDateMillis != null,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("تأكيد", fontWeight = FontWeight.Bold)
                     }
                 }
             }
