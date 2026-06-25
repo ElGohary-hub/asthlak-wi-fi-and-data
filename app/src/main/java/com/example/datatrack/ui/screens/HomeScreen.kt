@@ -5,6 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.widget.ImageView
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,7 +40,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-// دوال مساعدة لحساب التواريخ
 fun getTodayStart(): Long {
     return Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, 0)
@@ -53,15 +57,12 @@ fun getMonthStart(): Long {
     }.timeInMillis
 }
 
-// دالة لاختيار تاريخ البداية والنهاية
 fun showDateRangePicker(context: Context, onRangeSelected: (Long, Long) -> Unit) {
     val currentCal = Calendar.getInstance()
-    // 1. اختيار تاريخ البداية
     DatePickerDialog(context, { _, startYear, startMonth, startDay ->
         val startCal = Calendar.getInstance().apply {
             set(startYear, startMonth, startDay, 0, 0, 0)
         }
-        // 2. اختيار تاريخ النهاية (بعد ما يختار البداية)
         DatePickerDialog(context, { _, endYear, endMonth, endDay ->
             val endCal = Calendar.getInstance().apply {
                 set(endYear, endMonth, endDay, 23, 59, 59)
@@ -85,11 +86,13 @@ fun HomeScreen() {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("الواي فاي", "بيانات الهاتف")
 
-    // حالات الفلترة الزمنية
     val filterOptions = listOf("اليوم", "الشهر", "مخصص")
     var selectedFilter by remember { mutableIntStateOf(0) }
     var currentStartTime by remember { mutableLongStateOf(getTodayStart()) }
     var currentEndTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    // المتغير الخاص بالكبسولة التفاعلية
+    var capsuleText by remember { mutableStateOf("تتبع استهلاك ذكي") }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -109,12 +112,10 @@ fun HomeScreen() {
         return
     }
 
-    // الدالة دي هتشتغل وتسحب الداتا كل ما الوقت يتغير أو ندوس ريفريش
     LaunchedEffect(hasPermission, refreshTrigger, currentStartTime, currentEndTime) {
         if (hasPermission) {
             isLoading = true
             appsList = withContext(Dispatchers.IO) {
-                // باصينا الوقت الجديد للدالة
                 NetworkStatsHelper.getAppsDataUsage(context, currentStartTime, currentEndTime)
             }
             isLoading = false
@@ -134,7 +135,6 @@ fun HomeScreen() {
                 title = { Text("استهلاك البيانات", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { 
-                        // تحديث وقت النهاية للوقت الحالي قبل الريفريش
                         if (selectedFilter != 2) currentEndTime = System.currentTimeMillis()
                         refreshTrigger++ 
                     }) { 
@@ -146,7 +146,17 @@ fun HomeScreen() {
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             
-            // كارت الفلاتر الزمنية
+            // الكبسولة التفاعلية تم إضافتها هنا في منتصف الشاشة من الأعلى
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                AnimatedStarCapsule(
+                    text = capsuleText,
+                    onClick = {
+                        // النص هيتغير بأنيميشن لما تدوس عليه
+                        capsuleText = if (capsuleText == "تتبع استهلاك ذكي") "DataTrack Pro ✨" else "تتبع استهلاك ذكي"
+                    }
+                )
+            }
+
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(12.dp),
@@ -164,15 +174,15 @@ fun HomeScreen() {
                                 onClick = { 
                                     selectedFilter = index
                                     when(index) {
-                                        0 -> { // اليوم
+                                        0 -> { 
                                             currentStartTime = getTodayStart()
                                             currentEndTime = System.currentTimeMillis()
                                         }
-                                        1 -> { // الشهر
+                                        1 -> { 
                                             currentStartTime = getMonthStart()
                                             currentEndTime = System.currentTimeMillis()
                                         }
-                                        2 -> { // مخصص (تفعيل التقويم)
+                                        2 -> { 
                                             showDateRangePicker(context) { start, end ->
                                                 currentStartTime = start
                                                 currentEndTime = end
@@ -185,7 +195,6 @@ fun HomeScreen() {
                         }
                     }
                     
-                    // إظهار التواريخ المختارة لو اختار "مخصص"
                     if (selectedFilter == 2) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -313,6 +322,56 @@ fun RealAppCard(app: RealAppUsage, isWifiTab: Boolean) {
                 
                 Text(text = formatBytes(currentUsage), color = usageColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text(text = "الإجمالي: ${formatBytes(app.total)}", color = Color.Gray, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+// دالة الكبسولة التفاعلية اللي صممناها مع بعض
+@Composable
+fun AnimatedStarCapsule(
+    text: String,
+    onClick: () -> Unit = {}
+) {
+    val isDark = isSystemInDarkTheme()
+    val bgColor = if (isDark) Color(0xFF212121) else Color.White
+    val borderColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.26f)
+    val shadowElevation = if (isDark) 0.dp else 4.dp
+
+    Surface(
+        modifier = Modifier
+            .padding(8.dp)
+            .clickable { onClick() },
+        shape = CircleShape,
+        color = bgColor,
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = shadowElevation
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = "Star Icon",
+                tint = Color(0xFFFFC107), 
+                modifier = Modifier.size(20.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            Crossfade(
+                targetState = text, 
+                animationSpec = tween(durationMillis = 500), 
+                label = "TextFadeAnimation"
+            ) { animatedText ->
+                Text(
+                    text = animatedText,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color.White else Color.Black
+                )
             }
         }
     }
