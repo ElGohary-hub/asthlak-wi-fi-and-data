@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,9 +39,11 @@ fun HomeScreen() {
     var hasPermission by remember { mutableStateOf(NetworkStatsHelper.hasUsageStatsPermission(context)) }
     var appsList by remember { mutableStateOf(listOf<RealAppUsage>()) }
     var isLoading by remember { mutableStateOf(true) }
-    
-    // التعديل الأول: المتغير ده هو اللي هيجبر التطبيق يعمل ريفريش حقيقي
     var refreshTrigger by remember { mutableIntStateOf(0) }
+    
+    // متغير للتحكم في الـ Tabs (0 للواي فاي، 1 للداتا)
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabs = listOf("الواي فاي", "بيانات الهاتف")
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -60,7 +63,6 @@ fun HomeScreen() {
         return
     }
 
-    // التعديل التاني: ربطنا الـ LaunchedEffect بالـ refreshTrigger
     LaunchedEffect(hasPermission, refreshTrigger) {
         if (hasPermission) {
             isLoading = true
@@ -71,49 +73,85 @@ fun HomeScreen() {
         }
     }
 
+    // فلترة وترتيب القائمة بناءً على التاب المحدد
+    val displayList = remember(appsList, selectedTabIndex) {
+        if (selectedTabIndex == 0) {
+            // عرض تطبيقات الواي فاي وترتيبها من الأكبر للأصغر
+            appsList.filter { it.wifi > 0 }.sortedByDescending { it.wifi }
+        } else {
+            // عرض تطبيقات الداتا وترتيبها من الأكبر للأصغر
+            appsList.filter { it.mobile > 0 }.sortedByDescending { it.mobile }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("استهلاك البيانات الحقيقي", fontWeight = FontWeight.Bold) },
+                title = { Text("استهلاك البيانات", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = {
-                        // التعديل التالت: لما بتدوس هنا الرقم بيزيد، فالكود اللي فوق بيحس بالتغيير ويشتغل
-                        refreshTrigger++
-                    }) { 
+                    IconButton(onClick = { refreshTrigger++ }) { 
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh") 
                     }
                 }
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (appsList.isEmpty()) {
-                // ضفتلك دي كمان عشان لو مفيش استهلاك خالص النهارده ميجيبش شاشة فاضية
-                Text("لا يوجد بيانات استهلاك لليوم", modifier = Modifier.align(Alignment.Center), color = Color.Gray)
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(2.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            
+            // تصميم الـ Tabs
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                indicator = { tabPositions ->
+                    if (selectedTabIndex < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                            height = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = { 
                             Text(
-                                text = "استهلاك اليوم الحالي منذ 12:00 ص",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray
+                                text = title, 
+                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else Color.Gray
+                            ) 
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = if (index == 0) Icons.Default.Wifi else Icons.Default.CellularAlt,
+                                contentDescription = null
                             )
                         }
-                    }
+                    )
+                }
+            }
 
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                } else if (displayList.isEmpty()) {
+                    Text(
+                        text = "لا يوجد استهلاك مسجل في هذا القسم اليوم", 
+                        modifier = Modifier.align(Alignment.Center), 
+                        color = Color.Gray
+                    )
+                } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(appsList) { app -> RealAppCard(app = app) }
+                        items(displayList) { app -> 
+                            RealAppCard(app = app, isWifiTab = selectedTabIndex == 0) 
+                        }
                     }
                 }
             }
@@ -122,11 +160,12 @@ fun HomeScreen() {
 }
 
 @Composable
-fun RealAppCard(app: RealAppUsage) {
+fun RealAppCard(app: RealAppUsage, isWifiTab: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -139,13 +178,9 @@ fun RealAppCard(app: RealAppUsage) {
             ) {
                 AndroidView(
                     factory = { ctx ->
-                        ImageView(ctx).apply {
-                            scaleType = ImageView.ScaleType.FIT_CENTER
-                        }
+                        ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
                     },
-                    update = { imageView ->
-                        imageView.setImageDrawable(app.iconDrawable)
-                    },
+                    update = { imageView -> imageView.setImageDrawable(app.iconDrawable) },
                     modifier = Modifier.padding(8.dp).fillMaxSize()
                 )
             }
@@ -153,16 +188,36 @@ fun RealAppCard(app: RealAppUsage) {
             Spacer(modifier = Modifier.width(16.dp))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = app.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-                Text(text = app.packageName, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
+                Text(
+                    text = app.name, 
+                    fontWeight = FontWeight.Bold, 
+                    fontSize = 15.sp, 
+                    maxLines = 1
+                )
+                Text(
+                    text = app.packageName, 
+                    color = Color.Gray, 
+                    fontSize = 10.sp, 
+                    maxLines = 1
+                )
             }
             
+            // عرض الاستهلاك المخصص للتاب الحالي
             Column(horizontalAlignment = Alignment.End) {
-                Text(text = formatBytes(app.total), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "W: ${formatBytes(app.wifi)}", color = WifiColor, fontSize = 11.sp, modifier = Modifier.padding(end = 6.dp))
-                    Text(text = "M: ${formatBytes(app.mobile)}", color = DataColor, fontSize = 11.sp)
-                }
+                val currentUsage = if (isWifiTab) app.wifi else app.mobile
+                val usageColor = if (isWifiTab) WifiColor else DataColor
+                
+                Text(
+                    text = formatBytes(currentUsage), 
+                    color = usageColor, 
+                    fontSize = 18.sp, 
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "الإجمالي: ${formatBytes(app.total)}", 
+                    color = Color.Gray, 
+                    fontSize = 11.sp
+                )
             }
         }
     }
