@@ -10,7 +10,6 @@ import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Process
-import java.util.Calendar
 
 data class RealAppUsage(
     val name: String,
@@ -42,16 +41,10 @@ object NetworkStatsHelper {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    fun getAppsDataUsage(context: Context): List<RealAppUsage> {
+    // التعديل هنا: الدالة بقت بتاخد وقت البداية والنهاية من بره
+    fun getAppsDataUsage(context: Context, startTime: Long, endTime: Long): List<RealAppUsage> {
         val networkStatsManager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
         val packageManager = context.packageManager
-
-        val calendar = Calendar.getInstance()
-        val endTime = calendar.timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        val startTime = calendar.timeInMillis
 
         val usageMap = mutableMapOf<Int, Pair<Long, Long>>() 
 
@@ -89,14 +82,12 @@ object NetworkStatsHelper {
         var unknownWifi = 0L
         var unknownMobile = 0L
 
-        // 1. الخدعة الجديدة: سحب كل التطبيقات في خريطة محلية لتخطي حظر المسارات الوهمية
         val installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
         val appInfoMap = mutableMapOf<Int, ApplicationInfo>()
         for (info in installedApps) {
-            appInfoMap[info.uid % 100000] = info // تخزين الرقم التعريفي الأساسي
+            appInfoMap[info.uid % 100000] = info 
         }
 
-        // 2. معالجة الاستهلاك
         for ((uid, bytesPair) in usageMap) {
             val (wifi, mobile) = bytesPair
             if (wifi == 0L && mobile == 0L) continue 
@@ -109,7 +100,7 @@ object NetworkStatsHelper {
                 try {
                     var appName = packageManager.getApplicationLabel(appInfo).toString()
                     if (isClonedApp) {
-                        appName += " (نسخة 2)" // تمييز التطبيق المستنسخ
+                        appName += " (نسخة 2)" 
                     }
                     val icon = packageManager.getApplicationIcon(appInfo)
                     appUsageList.add(RealAppUsage(appName, appInfo.packageName, icon, wifi, mobile))
@@ -118,13 +109,11 @@ object NetworkStatsHelper {
                     unknownMobile += mobile
                 }
             } else {
-                // تجميع أي استهلاك مخفي أو خاص بخدمات النظام الأساسية جداً
                 unknownWifi += wifi
                 unknownMobile += mobile
             }
         }
 
-        // 3. عرض الاستهلاك المخفي في كارت مجمع عشان الإجمالي يظبط
         if (unknownWifi > 0 || unknownMobile > 0) {
             try {
                 val defaultIcon = context.getDrawable(android.R.drawable.sym_def_app_icon)!!
